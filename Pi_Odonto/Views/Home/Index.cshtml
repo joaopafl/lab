@@ -383,7 +383,7 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="/Admin/Login"><i class="fas fa-user-shield me-2 text-primary"></i> Admin</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="/Dentista"><i class="fas fa-tooth me-2 text-info"></i> Dentista</a></li>
+                            <li><a class="dropdown-item" href="/Auth/DentistaLogin"><i class="fas fa-tooth me-2 text-info"></i> Dentista</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -795,7 +795,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ESPERAR O BOOTSTRAP CARREGAR COMPLETAMENTE
+               // ESPERAR O BOOTSTRAP CARREGAR COMPLETAMENTE
         window.addEventListener('load', function() {
             console.log('Página carregada completamente');
 
@@ -803,23 +803,27 @@
             if (typeof bootstrap !== 'undefined') {
                 console.log('Bootstrap detectado!');
 
-                // Inicializar dropdown manualmente
-                const dropdownToggle = document.querySelector('.dropdown-toggle');
-                if (dropdownToggle) {
-                    console.log('Dropdown toggle encontrado:', dropdownToggle);
+                // Inicializar TODOS os dropdowns (querySelectorAll em vez de querySelector)
+                const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
 
-                    // Criar instância do dropdown
-                    const dropdown = new bootstrap.Dropdown(dropdownToggle);
-                    console.log('Dropdown criado:', dropdown);
+                if (dropdownToggles.length > 0) {
+                    console.log('Dropdowns encontrados:', dropdownToggles.length);
 
-                    // Adicionar listener de clique manual como backup
-                    dropdownToggle.addEventListener('click', function(e) {
-                        console.log('Clique no dropdown detectado');
-                        e.preventDefault();
-                        dropdown.toggle();
+                    dropdownToggles.forEach(function(dropdownToggle, index) {
+                        console.log('Inicializando dropdown', index + 1);
+
+                        // Criar instância do dropdown
+                        const dropdown = new bootstrap.Dropdown(dropdownToggle);
+
+                        // Adicionar listener de clique manual como backup
+                        dropdownToggle.addEventListener('click', function(e) {
+                            console.log('Clique no dropdown', index + 1, 'detectado');
+                            e.preventDefault();
+                            dropdown.toggle();
+                        });
                     });
                 } else {
-                    console.error('Dropdown toggle NÃO encontrado!');
+                    console.error('Nenhum dropdown toggle encontrado!');
                 }
             } else {
                 console.error('Bootstrap NÃO carregado!');
