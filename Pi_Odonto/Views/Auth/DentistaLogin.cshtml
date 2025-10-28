@@ -1,0 +1,223 @@
+﻿@model Pi_Odonto.ViewModels.DentistaLoginViewModel
+
+@{
+    ViewData["Title"] = "Login - Dentista";
+}
+
+<style>
+    :root {
+        --cor-primaria: #2c5282;
+        --cor-secundaria: #4a90e2;
+        --cor-sucesso: #48bb78;
+    }
+
+    body {
+        background: linear-gradient(135deg, #E3F2FD 0%, #E8F5E8 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .login-container {
+        max-width: 450px;
+        width: 100%;
+        padding: 20px;
+    }
+
+    .login-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .login-header {
+        background: linear-gradient(135deg, var(--cor-primaria), var(--cor-secundaria));
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+    }
+
+        .login-header i {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .login-header h2 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .login-header p {
+            margin: 10px 0 0;
+            opacity: 0.95;
+        }
+
+    .login-body {
+        padding: 40px 30px;
+    }
+
+    .form-group {
+        margin-bottom: 25px;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .form-control {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 15px;
+        font-size: 1rem;
+        transition: all 0.3s;
+        width: 100%;
+    }
+
+        .form-control:focus {
+            border-color: var(--cor-secundaria);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+            outline: none;
+        }
+
+    .btn-login {
+        background: linear-gradient(135deg, var(--cor-primaria), var(--cor-secundaria));
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 14px;
+        font-size: 1.1rem;
+        font-weight: bold;
+        width: 100%;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(74, 144, 226, 0.3);
+        }
+
+    .form-check {
+        margin: 20px 0;
+    }
+
+    .alert {
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .alert-danger {
+        background-color: #fee;
+        border: 1px solid #fcc;
+        color: #c33;
+    }
+
+    .alert-success {
+        background-color: #efe;
+        border: 1px solid #cfc;
+        color: #3c3;
+    }
+
+    .login-footer {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+    }
+
+        .login-footer a {
+            color: var(--cor-primaria);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+            .login-footer a:hover {
+                text-decoration: underline;
+            }
+
+    .text-danger {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 5px;
+    }
+</style>
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="fas fa-tooth"></i>
+            <h2>Área do Dentista</h2>
+            <p>Faça login para acessar o sistema</p>
+        </div>
+
+        <div class="login-body">
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+                </div>
+            }
+
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i> @TempData["ErrorMessage"]
+                </div>
+            }
+
+            <form asp-action="DentistaLogin" asp-controller="Auth" method="post">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                <div class="form-group">
+                    <label asp-for="Email" class="form-label">
+                        <i class="fas fa-envelope"></i> Email
+                    </label>
+                    <input asp-for="Email" class="form-control"
+                           placeholder="seu@email.com" autocomplete="email" />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label asp-for="Senha" class="form-label">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <input asp-for="Senha" type="password" class="form-control"
+                           placeholder="••••••••" autocomplete="current-password" />
+                    <span asp-validation-for="Senha" class="text-danger"></span>
+                </div>
+
+                <div class="form-check">
+                    <input asp-for="LembrarMe" class="form-check-input" type="checkbox" />
+                    <label asp-for="LembrarMe" class="form-check-label">
+                        Lembrar-me
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-login">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+            </form>
+        </div>
+
+        <div class="login-footer">
+            <p>
+                <a href="/">
+                    <i class="fas fa-arrow-left"></i> Voltar para Home
+                </a>
+            </p>
+            <p class="text-muted small mt-2">
+                Área restrita para dentistas cadastrados
+            </p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -48,7 +48,7 @@ namespace Pi_Odonto.Controllers
                     return View(voluntario);
                 }
 
-                voluntario.DataCadastro = System.DateTime.Now;
+                voluntario.DataSolicitacao = System.DateTime.Now;
                 _context.SolicitacoesVoluntario.Add(voluntario);
                 await _context.SaveChangesAsync();
 
@@ -93,7 +93,7 @@ namespace Pi_Odonto.Controllers
         {
             // Aqui você pode implementar uma verificação de admin
             var voluntarios = await _context.SolicitacoesVoluntario
-                .OrderByDescending(v => v.DataCadastro)
+                .OrderByDescending(v => v.DataSolicitacao)
                 .ToListAsync();
 
             return View(voluntarios);

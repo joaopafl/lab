@@ -6,7 +6,7 @@ using Pi_Odonto.Models;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SeuProjeto.Controllers
+namespace Pi_Odonto.Controllers
 {
     [Authorize]
     public class OdontogramaController : Controller

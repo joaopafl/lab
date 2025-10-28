@@ -10,8 +10,6 @@
         --cor-secundaria: #4a90e2;
         --cor-esperanca: #48bb78;
         --cor-amor: #f56565;
-        --cor-paz: #9f7aea;
-        --cor-accent: #ed8936;
     }
 
     .voluntario-container {
@@ -48,6 +46,50 @@
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
 
+    /* ESTILOS PARA AS MENSAGENS */
+    .alert {
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+
+    .alert-success i {
+        color: #28a745;
+        font-size: 1.5rem;
+    }
+
+    .alert-danger {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+
+    .alert-danger i {
+        color: #dc3545;
+        font-size: 1.5rem;
+    }
+
     .section-title {
         color: var(--cor-primaria);
         font-size: 1.3rem;
@@ -55,10 +97,6 @@
         margin: 30px 0 20px;
         padding-bottom: 10px;
         border-bottom: 2px solid var(--cor-secundaria);
-    }
-
-    .section-title:first-child {
-        margin-top: 0;
     }
 
     .form-group {
@@ -131,26 +169,6 @@
         margin-left: 3px;
     }
 
-    .validation-spinner {
-        display: none;
-        margin-left: 10px;
-        color: var(--cor-secundaria);
-    }
-
-    .is-invalid {
-        border-color: var(--cor-amor) !important;
-    }
-
-    .is-valid {
-        border-color: var(--cor-esperanca) !important;
-    }
-
-    .text-danger {
-        color: var(--cor-amor);
-        font-size: 0.9rem;
-        margin-top: 5px;
-    }
-
     .info-box {
         background: #f0f9ff;
         border-left: 4px solid var(--cor-secundaria);
@@ -183,10 +201,21 @@
     </div>
 
     <div class="form-card">
+        <!-- MENSAGEM DE SUCESSO -->
+        @if (TempData["Sucesso"] != null)
+        {
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <strong>@TempData["Sucesso"]</strong>
+            </div>
+        }
+
+        <!-- MENSAGEM DE ERRO -->
         @if (TempData["Erro"] != null)
         {
             <div class="alert alert-danger">
-                <i class="fas fa-exclamation-circle"></i> @TempData["Erro"]
+                <i class="fas fa-exclamation-circle"></i>
+                <strong>@TempData["Erro"]</strong>
             </div>
         }
 
@@ -224,9 +253,6 @@
                         </label>
                         <input asp-for="Cpf" class="form-control" placeholder="000.000.000-00" 
                                id="cpfInput" required />
-                        <span id="cpfSpinner" class="validation-spinner">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </span>
                         <span asp-validation-for="Cpf" class="text-danger"></span>
                     </div>
                 </div>
@@ -235,11 +261,8 @@
                         <label asp-for="Cro" class="form-label">
                             Número do CRO <span class="required-mark">*</span>
                         </label>
-                        <input asp-for="Cro" class="form-control" placeholder="SP-12345" 
+                        <input asp-for="Cro" class="form-control" placeholder="Ex: SP-12345" 
                                id="croInput" required />
-                        <span id="croSpinner" class="validation-spinner">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </span>
                         <span asp-validation-for="Cro" class="text-danger"></span>
                     </div>
                 </div>
@@ -257,10 +280,7 @@
                             Email <span class="required-mark">*</span>
                         </label>
                         <input asp-for="Email" type="email" class="form-control" 
-                               placeholder="seuemail@exemplo.com" id="emailInput" required />
-                        <span id="emailSpinner" class="validation-spinner">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </span>
+                               placeholder="seu@email.com" id="emailInput" required />
                         <span asp-validation-for="Email" class="text-danger"></span>
                     </div>
                 </div>
@@ -314,8 +334,9 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Máscaras
+        // Máscaras para CPF e Telefone
         document.querySelector('input[name="Cpf"]').addEventListener('input', function(e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length <= 11) {
@@ -335,149 +356,65 @@
             }
         });
 
-        // Validações assíncronas
-        let validacoesPendentes = new Set();
-
-        // Validar Email
-        const emailInput = document.getElementById('emailInput');
-        const emailSpinner = document.getElementById('emailSpinner');
-        
-        emailInput.addEventListener('blur', debounce(async function() {
-            const email = this.value.trim();
-            if (!email || !email.includes('@@')) return;
-
-            validacoesPendentes.add('email');
-            emailSpinner.style.display = 'inline';
-
-            try {
-                const response = await fetch('/Voluntario/ValidarEmail', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-
-                const data = await response.json();
-                
-                if (data.existe) {
-                    emailInput.classList.add('is-invalid');
-                    emailInput.classList.remove('is-valid');
-                    const errorSpan = emailInput.nextElementSibling.nextElementSibling;
-                    if (errorSpan && errorSpan.classList.contains('text-danger')) {
-                        errorSpan.textContent = 'Este email já possui uma solicitação cadastrada.';
+        // Validação dos campos ao sair (blur)
+        document.getElementById('cpfInput')?.addEventListener('blur', async function() {
+            const cpf = this.value;
+            if (cpf.length === 14) {
+                try {
+                    const response = await fetch('/Voluntario/ValidarCpfVoluntario', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cpf: cpf })
+                    });
+                    const data = await response.json();
+                    if (data.existe) {
+                        alert('Este CPF já possui uma solicitação cadastrada!');
+                        this.focus();
                     }
-                } else {
-                    emailInput.classList.remove('is-invalid');
-                    emailInput.classList.add('is-valid');
+                } catch (error) {
+                    console.error('Erro ao validar CPF:', error);
                 }
-            } catch (error) {
-                console.error('Erro ao validar email:', error);
-            } finally {
-                emailSpinner.style.display = 'none';
-                validacoesPendentes.delete('email');
-            }
-        }, 500));
-
-        // Validar CPF
-        const cpfInput = document.getElementById('cpfInput');
-        const cpfSpinner = document.getElementById('cpfSpinner');
-        
-        cpfInput.addEventListener('blur', debounce(async function() {
-            const cpf = this.value.replace(/\D/g, '');
-            if (cpf.length !== 11) return;
-
-            validacoesPendentes.add('cpf');
-            cpfSpinner.style.display = 'inline';
-
-            try {
-                const response = await fetch('/Voluntario/ValidarCpfVoluntario', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cpf })
-                });
-
-                const data = await response.json();
-                
-                if (data.existe) {
-                    cpfInput.classList.add('is-invalid');
-                    cpfInput.classList.remove('is-valid');
-                    const errorSpan = cpfInput.nextElementSibling.nextElementSibling;
-                    if (errorSpan && errorSpan.classList.contains('text-danger')) {
-                        errorSpan.textContent = 'Este CPF já possui uma solicitação cadastrada.';
-                    }
-                } else {
-                    cpfInput.classList.remove('is-invalid');
-                    cpfInput.classList.add('is-valid');
-                }
-            } catch (error) {
-                console.error('Erro ao validar CPF:', error);
-            } finally {
-                cpfSpinner.style.display = 'none';
-                validacoesPendentes.delete('cpf');
-            }
-        }, 500));
-
-        // Validar CRO
-        const croInput = document.getElementById('croInput');
-        const croSpinner = document.getElementById('croSpinner');
-        
-        croInput.addEventListener('blur', debounce(async function() {
-            const cro = this.value.trim();
-            if (!cro) return;
-
-            validacoesPendentes.add('cro');
-            croSpinner.style.display = 'inline';
-
-            try {
-                const response = await fetch('/Voluntario/ValidarCro', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cro })
-                });
-
-                const data = await response.json();
-                
-                if (data.existe) {
-                    croInput.classList.add('is-invalid');
-                    croInput.classList.remove('is-valid');
-                    const errorSpan = croInput.nextElementSibling.nextElementSibling;
-                    if (errorSpan && errorSpan.classList.contains('text-danger')) {
-                        errorSpan.textContent = 'Este CRO já possui uma solicitação cadastrada.';
-                    }
-                } else {
-                    croInput.classList.remove('is-invalid');
-                    croInput.classList.add('is-valid');
-                }
-            } catch (error) {
-                console.error('Erro ao validar CRO:', error);
-            } finally {
-                croSpinner.style.display = 'none';
-                validacoesPendentes.delete('cro');
-            }
-        }, 500));
-
-        // Validar antes de enviar
-        document.getElementById('formVoluntario').addEventListener('submit', function(e) {
-            if (validacoesPendentes.size > 0) {
-                e.preventDefault();
-                alert('Aguarde a validação dos dados...');
-                return false;
-            }
-
-            const camposInvalidos = document.querySelectorAll('.is-invalid');
-            if (camposInvalidos.length > 0) {
-                e.preventDefault();
-                alert('Corrija os erros antes de enviar.');
-                return false;
             }
         });
 
-        function debounce(func, wait) {
-            let timeout;
-            return function() {
-                const args = arguments;
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
+        document.getElementById('emailInput')?.addEventListener('blur', async function() {
+            const email = this.value;
+            if (email && email.includes('@@')) {
+                try {
+                    const response = await fetch('/Voluntario/ValidarEmail', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email })
+                    });
+                    const data = await response.json();
+                    if (data.existe) {
+                        alert('Este email já possui uma solicitação cadastrada!');
+                        this.focus();
+                    }
+                } catch (error) {
+                    console.error('Erro ao validar email:', error);
+                }
+            }
+        });
+
+        document.getElementById('croInput')?.addEventListener('blur', async function() {
+            const cro = this.value;
+            if (cro) {
+                try {
+                    const response = await fetch('/Voluntario/ValidarCro', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cro: cro })
+                    });
+                    const data = await response.json();
+                    if (data.existe) {
+                        alert('Este CRO já possui uma solicitação cadastrada!');
+                        this.focus();
+                    }
+                } catch (error) {
+                    console.error('Erro ao validar CRO:', error);
+                }
+            }
+        });
     </script>
 }

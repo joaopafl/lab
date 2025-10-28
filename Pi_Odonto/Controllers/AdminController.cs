@@ -1,12 +1,15 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Pi_Odonto.Data;
 using Pi_Odonto.Models;
+using Pi_Odonto.Helpers;
+using Pi_Odonto.ViewModels;
 
 namespace Pi_Odonto.Controllers
 {
     [Authorize]
+    [Route("Admin")]
     public class AdminController : Controller
     {
         private readonly AppDbContext _context;
@@ -16,29 +19,323 @@ namespace Pi_Odonto.Controllers
             _context = context;
         }
 
-        // GET: Admin/Dashboard
+        // Verificar se é admin
+        private bool IsAdmin()
+        {
+            return User.HasClaim("TipoUsuario", "Admin");
+        }
+
+        // GET: Dashboard Admin
+        [Route("Dashboard")]
         public IActionResult Dashboard()
         {
-            ViewBag.TotalResponsaveis = _context.Responsaveis.Count();
-            ViewBag.TotalCriancas = _context.Criancas.Count();
-            ViewBag.TotalDentistas = _context.Dentistas.Count();
-            ViewBag.TotalAgendamentos = _context.Agendamentos.Count();
-            ViewBag.TotalSolicitacoesVoluntarios = _context.SolicitacoesVoluntario.Count();
-            ViewBag.SolicitacoesNaoVisualizadas = _context.SolicitacoesVoluntario.Count(s => !s.Visualizado);
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            // Estatísticas para o dashboard
+            var totalResponsaveis = _context.Responsaveis.Count();
+            var responsaveisAtivos = _context.Responsaveis.Count(r => r.Ativo);
+            var cadastrosHoje = _context.Responsaveis.Count(r => r.DataCadastro.Date == DateTime.Today);
+            var cadastrosEsteMes = _context.Responsaveis.Count(r => r.DataCadastro.Month == DateTime.Now.Month && r.DataCadastro.Year == DateTime.Now.Year);
+
+            ViewBag.TotalResponsaveis = totalResponsaveis;
+            ViewBag.ResponsaveisAtivos = responsaveisAtivos;
+            ViewBag.CadastrosHoje = cadastrosHoje;
+            ViewBag.CadastrosEsteMes = cadastrosEsteMes;
+
+            // Últimos cadastros
+            var ultimosCadastros = _context.Responsaveis
+                .OrderByDescending(r => r.DataCadastro)
+                .Take(5)
+                .ToList();
+
+            return View(ultimosCadastros);
+        }
+
+        // GET: Lista de Responsáveis (Admin)
+        [Route("Responsaveis")]
+        public IActionResult Responsaveis(string busca = "", bool? ativo = null)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            var query = _context.Responsaveis.AsQueryable();
+
+            // Filtro de busca
+            if (!string.IsNullOrEmpty(busca))
+            {
+                query = query.Where(r =>
+                    r.Nome.Contains(busca) ||
+                    r.Email.Contains(busca) ||
+                    r.Cpf.Contains(busca) ||
+                    r.Telefone.Contains(busca));
+            }
+
+            // Filtro de status
+            if (ativo.HasValue)
+            {
+                query = query.Where(r => r.Ativo == ativo.Value);
+            }
+
+            var responsaveis = query
+                .Include(r => r.Criancas)
+                .OrderByDescending(r => r.DataCadastro)
+                .ToList();
+
+            ViewBag.Busca = busca;
+            ViewBag.Ativo = ativo;
+
+            return View(responsaveis);
+        }
+
+        // GET: Visualizar Responsável
+        [Route("Responsaveis/Detalhes/{id}")]
+        public IActionResult DetalhesResponsavel(int id)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            var responsavel = _context.Responsaveis
+                .Include(r => r.Criancas)
+                .FirstOrDefault(r => r.Id == id);
+
+            if (responsavel == null)
+            {
+                return NotFound();
+            }
+
+            return View(responsavel);
+        }
+
+        // GET: Editar Responsável (Admin)
+        [Route("Responsaveis/Editar/{id}")]
+        public IActionResult EditarResponsavel(int id)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            var responsavel = _context.Responsaveis
+                .Include(r => r.Criancas)
+                .FirstOrDefault(r => r.Id == id);
+
+            if (responsavel == null)
+            {
+                return NotFound();
+            }
+
+            // Limpar senha para não mostrar
+            responsavel.Senha = "";
+
+            // Criar ViewModel
+            var viewModel = new ResponsavelCriancaViewModel
+            {
+                Responsavel = responsavel,
+                Criancas = responsavel.Criancas?.ToList() ?? new List<Crianca>(),
+                OpcoesParentesco = new List<string>
+                {
+                    "Pai", "Mãe", "Avô", "Avó", "Tio", "Tia", "Padrasto", "Madrasta", "Tutor Legal"
+                }
+            };
+
+            return View(viewModel);
+        }
+
+        // POST: Editar Responsável (Admin)
+        [HttpPost]
+        [Route("Responsaveis/Editar/{id}")]
+        public IActionResult EditarResponsavel(int id, ResponsavelCriancaViewModel viewModel)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            if (id != viewModel.Responsavel.Id)
+            {
+                return BadRequest();
+            }
+
+            var responsavelAtual = _context.Responsaveis.Find(id);
+            if (responsavelAtual == null)
+            {
+                return NotFound();
+            }
+
+            // Validar email único
+            if (_context.Responsaveis.Any(r => r.Email == viewModel.Responsavel.Email && r.Id != id))
+            {
+                ModelState.AddModelError("Responsavel.Email", "Este email já está em uso");
+            }
+
+            // Remove validação de senha se estiver vazia
+            if (string.IsNullOrEmpty(viewModel.Responsavel.Senha))
+            {
+                ModelState.Remove("Responsavel.Senha");
+                ModelState.Remove("ConfirmarSenha");
+            }
+
+            if (ModelState.IsValid)
+            {
+                // Remover máscara
+                viewModel.Responsavel.Cpf = viewModel.Responsavel.Cpf.Replace(".", "").Replace("-", "");
+                viewModel.Responsavel.Telefone = viewModel.Responsavel.Telefone.Replace("(", "").Replace(")", "").Replace(" ", "").Replace("-", "");
+
+                // Atualizar dados
+                responsavelAtual.Nome = viewModel.Responsavel.Nome;
+                responsavelAtual.Email = viewModel.Responsavel.Email;
+                responsavelAtual.Telefone = viewModel.Responsavel.Telefone;
+                responsavelAtual.Endereco = viewModel.Responsavel.Endereco;
+                responsavelAtual.Cpf = viewModel.Responsavel.Cpf;
+                responsavelAtual.Ativo = viewModel.Responsavel.Ativo;
+
+                // Se forneceu nova senha
+                if (!string.IsNullOrEmpty(viewModel.Responsavel.Senha))
+                {
+                    responsavelAtual.Senha = PasswordHelper.HashPassword(viewModel.Responsavel.Senha);
+                }
+
+                _context.Responsaveis.Update(responsavelAtual);
+                _context.SaveChanges();
+
+                TempData["Sucesso"] = "Responsável atualizado com sucesso!";
+                return RedirectToAction("Responsaveis");
+            }
+
+            // Se deu erro, recarregar as opções e as crianças
+            if (viewModel.OpcoesParentesco == null || !viewModel.OpcoesParentesco.Any())
+            {
+                viewModel.OpcoesParentesco = new List<string>
+                {
+                    "Pai", "Mãe", "Avô", "Avó", "Tio", "Tia", "Padrasto", "Madrasta", "Tutor Legal"
+                };
+            }
+
+            // Recarregar as crianças do banco se não existirem
+            if (viewModel.Criancas == null || !viewModel.Criancas.Any())
+            {
+                var responsavelComCriancas = _context.Responsaveis
+                    .Include(r => r.Criancas)
+                    .FirstOrDefault(r => r.Id == id);
+
+                viewModel.Criancas = responsavelComCriancas?.Criancas?.ToList() ?? new List<Crianca>();
+            }
+
+            return View(viewModel);
+        }
+
+        // POST: Desativar/Ativar Responsável
+        [HttpPost]
+        [Route("Responsaveis/ToggleStatus/{id}")]
+        public IActionResult ToggleStatus(int id)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            var responsavel = _context.Responsaveis.Find(id);
+            if (responsavel == null)
+            {
+                return NotFound();
+            }
+
+            responsavel.Ativo = !responsavel.Ativo;
+            _context.Responsaveis.Update(responsavel);
+            _context.SaveChanges();
+
+            TempData["Sucesso"] = $"Responsável {(responsavel.Ativo ? "ativado" : "desativado")} com sucesso!";
+            return RedirectToAction("Responsaveis");
+        }
+
+        // POST: Excluir Responsável (Admin)
+        [HttpPost]
+        [Route("Responsaveis/Excluir/{id}")]
+        public IActionResult ExcluirResponsavel(int id)
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            var responsavel = _context.Responsaveis
+                .Include(r => r.Criancas)
+                .FirstOrDefault(r => r.Id == id);
+
+            if (responsavel == null)
+            {
+                return NotFound();
+            }
+
+            // Remove as crianças primeiro (devido ao FK)
+            if (responsavel.Criancas.Any())
+            {
+                _context.Criancas.RemoveRange(responsavel.Criancas);
+            }
+
+            _context.Responsaveis.Remove(responsavel);
+            _context.SaveChanges();
+
+            TempData["Sucesso"] = "Responsável e suas crianças excluídos com sucesso!";
+            return RedirectToAction("Responsaveis");
+        }
+
+        // GET: Relatórios
+        [Route("Relatorios")]
+        public IActionResult Relatorios()
+        {
+            if (!IsAdmin())
+            {
+                return RedirectToAction("AdminLogin", "Auth");
+            }
+
+            // Dados para relatórios
+            var totalResponsaveis = _context.Responsaveis.Count();
+            var responsaveisAtivos = _context.Responsaveis.Count(r => r.Ativo);
+            var responsaveisInativos = _context.Responsaveis.Count(r => !r.Ativo);
+
+            // Cadastros por mês (últimos 6 meses)
+            var cadastrosPorMes = new List<object>();
+            for (int i = 5; i >= 0; i--)
+            {
+                var data = DateTime.Now.AddMonths(-i);
+                var count = _context.Responsaveis.Count(r =>
+                    r.DataCadastro.Month == data.Month &&
+                    r.DataCadastro.Year == data.Year);
+
+                cadastrosPorMes.Add(new
+                {
+                    Mes = data.ToString("MMM/yyyy"),
+                    Count = count
+                });
+            }
+
+            ViewBag.TotalResponsaveis = totalResponsaveis;
+            ViewBag.ResponsaveisAtivos = responsaveisAtivos;
+            ViewBag.ResponsaveisInativos = responsaveisInativos;
+            ViewBag.CadastrosPorMes = cadastrosPorMes;
 
             return View();
         }
 
         // ========================================
-        // GERENCIAMENTO DE SOLICITAÇÕES VOLUNTÁRIO
+        // NOVAS FUNCIONALIDADES - VOLUNTÁRIOS
         // ========================================
 
-        [HttpGet]
+        // GET: Solicitações de Voluntários
+        [Route("Solicitacoes")]
         public async Task<IActionResult> Solicitacoes(string filtro = "todas")
         {
             if (!IsAdmin())
             {
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("AdminLogin", "Auth");
             }
 
             var query = _context.SolicitacoesVoluntario.AsQueryable();
@@ -64,126 +361,90 @@ namespace Pi_Odonto.Controllers
                 .ToListAsync();
 
             ViewBag.Filtro = filtro;
-            ViewBag.TotalPendentes = await _context.SolicitacoesVoluntario
-                .CountAsync(s => s.Status == "Pendente");
-            ViewBag.TotalNaoVisualizadas = await _context.SolicitacoesVoluntario
-                .CountAsync(s => !s.Visualizado);
+            ViewBag.TotalNaoVisualizadas = await _context.SolicitacoesVoluntario.CountAsync(s => !s.Visualizado);
+            ViewBag.TotalPendentes = await _context.SolicitacoesVoluntario.CountAsync(s => s.Status == "Pendente");
 
             return View(solicitacoes);
         }
 
-        [HttpGet]
-        public async Task<IActionResult> DetalhesSolicitacao(int id)
+        // POST: Marcar como visualizado
+        [HttpPost]
+        [Route("Solicitacoes/MarcarVisualizado/{id}")]
+        public async Task<IActionResult> MarcarComoVisualizado(int id)
         {
             if (!IsAdmin())
             {
-                return RedirectToAction("Index", "Home");
+                return Json(new { success = false, message = "Acesso negado" });
             }
 
-            var solicitacao = await _context.SolicitacoesVoluntario
-                .FirstOrDefaultAsync(s => s.Id == id);
-
+            var solicitacao = await _context.SolicitacoesVoluntario.FindAsync(id);
             if (solicitacao == null)
             {
-                TempData["Erro"] = "Solicitação não encontrada.";
-                return RedirectToAction("Solicitacoes");
+                return Json(new { success = false, message = "Solicitação não encontrada" });
             }
 
-            if (!solicitacao.Visualizado)
-            {
-                solicitacao.Visualizado = true;
-                await _context.SaveChangesAsync();
-            }
+            solicitacao.Visualizado = true;
+            solicitacao.DataResposta = DateTime.Now;
+            await _context.SaveChangesAsync();
 
-            return View(solicitacao);
+            return Json(new { success = true });
         }
 
+        // POST: Aprovar solicitação
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AprovarSolicitacao(int id, string observacao)
+        [Route("Solicitacoes/Aprovar/{id}")]
+        public async Task<IActionResult> AprovarSolicitacao(int id, string? observacao)
         {
             if (!IsAdmin())
             {
                 return Json(new { success = false, message = "Acesso negado" });
             }
 
-            try
+            var solicitacao = await _context.SolicitacoesVoluntario.FindAsync(id);
+            if (solicitacao == null)
             {
-                var solicitacao = await _context.SolicitacoesVoluntario
-                    .FirstOrDefaultAsync(s => s.Id == id);
-
-                if (solicitacao == null)
-                {
-                    return Json(new { success = false, message = "Solicitação não encontrada" });
-                }
-
-                solicitacao.Status = "Aprovado";
-                solicitacao.DataResposta = DateTime.Now;
-                solicitacao.ObservacaoAdmin = observacao;
-                solicitacao.Visualizado = true;
-
-                await _context.SaveChangesAsync();
-
-                return Json(new
-                {
-                    success = true,
-                    message = "Solicitação aprovada com sucesso!"
-                });
+                return Json(new { success = false, message = "Solicitação não encontrada" });
             }
-            catch (Exception ex)
-            {
-                return Json(new
-                {
-                    success = false,
-                    message = $"Erro ao aprovar solicitação: {ex.Message}"
-                });
-            }
+
+            solicitacao.Status = "Aprovado";
+            solicitacao.Visualizado = true;
+            solicitacao.DataResposta = DateTime.Now;
+            solicitacao.ObservacaoAdmin = observacao;
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = "Solicitação aprovada com sucesso!" });
         }
 
+        // POST: Rejeitar solicitação
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RejeitarSolicitacao(int id, string observacao)
+        [Route("Solicitacoes/Rejeitar/{id}")]
+        public async Task<IActionResult> RejeitarSolicitacao(int id, string? observacao)
         {
             if (!IsAdmin())
             {
                 return Json(new { success = false, message = "Acesso negado" });
             }
 
-            try
+            var solicitacao = await _context.SolicitacoesVoluntario.FindAsync(id);
+            if (solicitacao == null)
             {
-                var solicitacao = await _context.SolicitacoesVoluntario
-                    .FirstOrDefaultAsync(s => s.Id == id);
-
-                if (solicitacao == null)
-                {
-                    return Json(new { success = false, message = "Solicitação não encontrada" });
-                }
-
-                solicitacao.Status = "Rejeitado";
-                solicitacao.DataResposta = DateTime.Now;
-                solicitacao.ObservacaoAdmin = observacao;
-                solicitacao.Visualizado = true;
-
-                await _context.SaveChangesAsync();
-
-                return Json(new
-                {
-                    success = true,
-                    message = "Solicitação rejeitada."
-                });
+                return Json(new { success = false, message = "Solicitação não encontrada" });
             }
-            catch (Exception ex)
-            {
-                return Json(new
-                {
-                    success = false,
-                    message = $"Erro ao rejeitar solicitação: {ex.Message}"
-                });
-            }
+
+            solicitacao.Status = "Rejeitado";
+            solicitacao.Visualizado = true;
+            solicitacao.DataResposta = DateTime.Now;
+            solicitacao.ObservacaoAdmin = observacao;
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = "Solicitação rejeitada." });
         }
 
+        // POST: Excluir solicitação
         [HttpPost]
-        [ValidateAntiForgeryToken]
+        [Route("Solicitacoes/Excluir/{id}")]
         public async Task<IActionResult> ExcluirSolicitacao(int id)
         {
             if (!IsAdmin())
@@ -192,33 +453,19 @@ namespace Pi_Odonto.Controllers
                 return RedirectToAction("Solicitacoes");
             }
 
-            try
+            var solicitacao = await _context.SolicitacoesVoluntario.FindAsync(id);
+            if (solicitacao != null)
             {
-                var solicitacao = await _context.SolicitacoesVoluntario
-                    .FirstOrDefaultAsync(s => s.Id == id);
-
-                if (solicitacao != null)
-                {
-                    _context.SolicitacoesVoluntario.Remove(solicitacao);
-                    await _context.SaveChangesAsync();
-                    TempData["Sucesso"] = "Solicitação excluída com sucesso.";
-                }
-                else
-                {
-                    TempData["Erro"] = "Solicitação não encontrada.";
-                }
+                _context.SolicitacoesVoluntario.Remove(solicitacao);
+                await _context.SaveChangesAsync();
+                TempData["Sucesso"] = "Solicitação excluída com sucesso.";
             }
-            catch (Exception ex)
+            else
             {
-                TempData["Erro"] = $"Erro ao excluir solicitação: {ex.Message}";
+                TempData["Erro"] = "Solicitação não encontrada.";
             }
 
             return RedirectToAction("Solicitacoes");
-        }
-
-        private bool IsAdmin()
-        {
-            return User.HasClaim("TipoUsuario", "Admin");
         }
     }
 }

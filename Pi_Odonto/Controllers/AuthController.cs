@@ -294,6 +294,59 @@ namespace Pi_Odonto.Controllers
             return View();
         }
 
+        // GET: Login de Dentista
+        [HttpGet]
+        [Route("Auth/DentistaLogin")]
+        public IActionResult DentistaLogin()
+        {
+            if (User.Identity?.IsAuthenticated == true && User.HasClaim("TipoUsuario", "Dentista"))
+            {
+                return RedirectToAction("Dashboard", "Dentista");
+            }
+            return View();
+        }
+
+        // POST: Login de Dentista
+        [HttpPost]
+        [Route("Auth/DentistaLogin")]
+        public async Task<IActionResult> DentistaLogin(DentistaLoginViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var dentista = _context.Dentistas
+                    .FirstOrDefault(d => d.Email == model.Email && d.Ativo);
+
+                if (dentista != null && PasswordHelper.VerifyPassword(model.Senha, dentista.Senha ?? ""))
+                {
+                    var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, dentista.Nome),
+                new Claim(ClaimTypes.Email, dentista.Email),
+                new Claim("DentistaId", dentista.Id.ToString()),
+                new Claim("TipoUsuario", "Dentista")
+            };
+
+                    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                    var authProperties = new AuthenticationProperties
+                    {
+                        IsPersistent = model.LembrarMe,
+                        ExpiresUtc = model.LembrarMe ?
+                            DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(2)
+                    };
+
+                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                        new ClaimsPrincipal(claimsIdentity), authProperties);
+
+                    return RedirectToAction("Dashboard", "Dentista");
+                }
+
+                ModelState.AddModelError("", "Email ou senha inválidos");
+            }
+
+            return View(model);
+        }
+
         // Método privado para gerar token seguro
         private string GerarTokenSeguro()
         {
